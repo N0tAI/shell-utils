@@ -30,9 +30,18 @@ function mbash() {
                 ;;
         esac
     done
-
+    
+    function evaluate() {
+        eval "${@}"
+    }
     function process_file() {
-        local current_command
+        shopt -sq extglob
+        local line
+        local line_part
+        # Line commands trail the line and are denoted with #$
+        local line_command
+        # Inline command is a command which outputs as part of the middle of a raw line
+        local inline_command
 
         # todo: '#$|' execute command with stdin being the line preceeding the command
         # todo: '#$[n]>' execute command with fd n being stdin
@@ -42,25 +51,62 @@ function mbash() {
         # todo: '#$while [ cond ]; <commands>'
         # todo: '#$if cond', '#$elif cond', '#$else'
         # todo: `${{ }}` inline command syntax
-        while IFS= read -r line || [ -n "${current_command}" ]; do
+        while IFS= read -r line || [ -n "${line_command}" ]; do
             #echo "${inline_command}"
+
+            # todo: ensure that line is only #$ if there is line contents
             if [[ "${line}" == '#$'* ]]; then
-                inline_command+="${line#'#$'}"$'\n'
+                line_command+="${line#'#$'}"$'\n'
                 continue
-            elif [ -n "${inline_command}" ]; then
-                eval "${inline_command}"
-                inline_command=
+            # if line command is set but the line does not start with a command marker
+            elif [ -n "${line_command}" ]; then
+                (eval "${line_command}")
+                line_command=
             fi
         
             if [[ "${line}" == *'#$'* ]]; then
-                inline_command="${line#*'#$'}"$'\n'
-                line="${line%%'#$'*}"
+                line_command="${line#*'#$'}"$'\n'
+                line="${line%'#$'*}"
             fi
-        
-            printf "%s" "${line}"
-            if [ -z "${inline_command}" ]; then
-                echo;
-            fi
+       
+            # iterate the line and process inline commands
+            while [ -n "${line}" ]; do
+                line_part="${line%%?(?)'${{'*'}}'*}"
+                echo "raw capture: '${line_part}'" >&2
+                if [ -n "${line_part}" ]; then
+                    # Advance the line by content grabbed
+                    line="${line#"${line_part}"}"
+                    echo -n -E "${line_part}"
+                    line_part=
+                fi
+
+                # TODO: multiline inlines
+                # TODO: Implicit variable expansion
+                line_part="${line%"${line#?(?)'${{'*'}}'}"}"
+                if [ -n "${line_part}" ]; then
+                    if [[ "${line_part}" == '\$'* ]]; then
+                        echo "escaped inline capture: ${line_part}" >&2
+                        echo -n -E "${line_part}"
+                    else
+                        echo "inline capture: '${line_part}'" >&2
+                        echo -n "${line_part:0:1}"
+                        inline_command="${line_part#*'${{'}"
+                        inline_command="${inline_command%'}}'}"
+                        if [ -n "${inline_command}" ]; then
+                            (
+                                shopt -s expand_aliases
+                                alias echo='echo -En ';
+                                evaluate "${inline_command}"
+                            )
+                        fi
+                        inline_command=
+                    fi
+                    line="${line#"${line_part}"}"
+                    line_part=
+                fi
+            done
+
+            [ -z "${line_command}" ] && echo
 
         done < "${FILE}"
 
