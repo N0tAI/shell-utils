@@ -1,0 +1,83 @@
+#!/bin/bash
+
+function mbash() {
+    if [ -z "${1}" ]; then
+        echo "Usage: ${0} [FILES ...]"
+        return 1
+    fi
+
+    PROCESSING_FILES=()
+    BASHMACRO_RC="./.macrorc"
+
+    while [ "${#}" -gt 0 ]; do
+        case "${1}" in
+            --rcfile=*)
+                BASHMACRO_RC="${1#*=}"
+                shift
+                ;;
+            --rcfile)
+                BASHMACRO_RC="${2}"
+                shift 2
+                ;;
+            --)
+                PROCESSING_FILES+=("${@:2}")
+                break
+                ;;
+        
+            *)
+                PROCESSING_FILES+=("${1}")
+                shift
+                ;;
+        esac
+    done
+
+    function process_file() {
+        local current_command
+
+        # todo: '#$|' execute command with stdin being the line preceeding the command
+        # todo: '#$[n]>' execute command with fd n being stdin
+        # todo: '#$[n]<' if there are commands following the commands are executed with stdout being fd n, if no commands start a multiline capture and pipe capture to fd n
+        # todo: '#$-' no further commands may follow, ends a multiline capture
+        # todo: '#$rep [n]'
+        # todo: '#$while [ cond ]; <commands>'
+        # todo: '#$if cond', '#$elif cond', '#$else'
+        # todo: `${{ }}` inline command syntax
+        while IFS= read -r line || [ -n "${current_command}" ]; do
+            #echo "${inline_command}"
+            if [[ "${line}" == '#$'* ]]; then
+                inline_command+="${line#'#$'}"$'\n'
+                continue
+            elif [ -n "${inline_command}" ]; then
+                eval "${inline_command}"
+                inline_command=
+            fi
+        
+            if [[ "${line}" == *'#$'* ]]; then
+                inline_command="${line#*'#$'}"$'\n'
+                line="${line%%'#$'*}"
+            fi
+        
+            printf "%s" "${line}"
+            if [ -z "${inline_command}" ]; then
+                echo;
+            fi
+
+        done < "${FILE}"
+
+    }
+
+    for FILE in "${PROCESSING_FILES[@]}"; do
+        if [ "${FILE}" = '-' ]; then
+            FILE="/dev/stdin"
+        elif [ ! -f "${FILE}" ]; then
+            echo "'${FILE}' not found" >&2
+            continue
+        fi
+    
+        process_file "${FILE}"
+    done
+
+    unset -f process_file
+}
+
+[[ "$-" != *i* ]] && mbash "${@}"
