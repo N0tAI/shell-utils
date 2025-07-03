@@ -32,7 +32,7 @@ function mbash() {
     done
     
     function evaluate() {
-        eval "${@}"
+        eval "${*}"
     }
     function process_file() {
         shopt -sq extglob
