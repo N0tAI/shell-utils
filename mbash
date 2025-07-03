@@ -50,11 +50,8 @@ function mbash() {
         # todo: '#$rep [n]'
         # todo: '#$while [ cond ]; <commands>'
         # todo: '#$if cond', '#$elif cond', '#$else'
-        # todo: `${{ }}` inline command syntax
         while IFS= read -r line || [ -n "${line_command}" ]; do
-            #echo "${inline_command}"
-
-            # todo: ensure that line is only #$ if there is line contents
+            # todo: if line is a special line command evaluate the existing line if it exists, then run it
             if [[ "${line}" == '#$'* ]]; then
                 line_command+="${line#'#$'}"$'\n'
                 continue
@@ -81,7 +78,7 @@ function mbash() {
                 fi
 
                 # TODO: multiline inlines
-                # TODO: Implicit variable expansion
+                # TODO: if whole inline is a variable expansion, support implicit variable expansion
                 line_part="${line%"${line#?(?)'${{'*'}}'}"}"
                 if [ -n "${line_part}" ]; then
                     if [[ "${line_part}" == '\$'* ]]; then
