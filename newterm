@@ -1,0 +1,62 @@
+#!/usr/bin/bash
+SESSION_WINDOW_CLASS='tmux-iterm'
+# 1 = priority workspace
+# 2 = all other workspaces to search
+find_tmux_session() {
+    local pid
+    # check all workspaces starting with the priority workspace
+    for ws in "${@}"; do
+        read -r WAYLAND_ADDRESS pid <<< "$(hyprctl clients -j | jq -r ".[] | select(.workspace.id == (${ws} | tonumber) and .class == \"${SESSION_WINDOW_CLASS}\") | \"\\(.address) \\(.pid)\"")"
+        if [ -n "${WAYLAND_ADDRESS}" ]; then
+            local tmux_client_pid
+            tmux_client_pid="$(ps --ppid "${pid}" -o pid= | sed 's/^[[:blank:]]*//;s/[[:blank:]]*$//')"
+            SELECTED_TMUX_SESSION="$(tmux list-client -F "#{client_session}" -f "#{==:#{client_pid},${tmux_client_pid}}")"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+add_tmux_pane() {
+    # Gets the currently active window in the existing session
+    local active_window
+    active_window="$(tmux list-windows -F '#{?window_active,#{window_index},}' -t "${1}")"
+    if [ -n "${2}" ]; then
+        tmux split-window -h -t "${1}:${active_window}" -- "${2}"
+    else
+        tmux split-window -h -t "${1}:${active_window}"
+    fi
+}
+get_focused_workspace_name() {
+    hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.name'
+}
+main() {
+    local FOCUSED_WORKSPACE
+    local VISIBLE_WORKSPACES
+    local WAYLAND_ADDRESS
+    local SESSION_WINDOW_CLASS
+    local COMMAND
+    COMMAND="${*}"
+    FOCUSED_WORKSPACE=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.id')
+    VISIBLE_WORKSPACES=$(hyprctl monitors -j | jq -r '.[] | select(.focused == false) | .activeWorkspace.id')
+    
+    find_tmux_session "${FOCUSED_WORKSPACE}" "${VISIBLE_WORKSPACES}"
+    
+    if [ -z "${WAYLAND_ADDRESS}" ]; then
+        local workspace_name
+        workspace_name="hypr_$(get_focused_workspace_name)"
+        
+        local hyprland_command
+        hyprland_command="alacritty --class '${SESSION_WINDOW_CLASS}' -e tmux new -AD -s '${workspace_name}'"
+
+        [ -n "${COMMAND}" ] && hyprland_command="${hyprland_command} '${COMMAND}'"
+
+        # Create new window if no window found
+        hyprctl dispatch exec "${hyprland_command}"
+    else
+        # Gotta get the workspace of the focused tmux window
+        add_tmux_pane "${SELECTED_TMUX_SESSION}" "${COMMAND}"
+        hyprctl dispatch focuswindow "address:${WAYLAND_ADDRESS}" > /dev/null
+    fi
+}
+main "${@}"

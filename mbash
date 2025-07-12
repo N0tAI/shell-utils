@@ -30,9 +30,61 @@ function mbash() {
                 ;;
         esac
     done
+
+    function setup_stdout() {
+        local copy_fd="${1}"
+
+        # Create a copy of stdout
+        exec {_STDOUT_COPY}>&1
+
+        echo "${copy_fd}"
+        # setup interceptor (stdout is now a pipe to tee that writes to the respective pipes)
+        exec 1> >(tee "/dev/fd/${_STDOUT_COPY}" >&"${copy_fd}")
+        return 0
+    }
+
+    function restore_stdout() {
+        if [ -z "${_STDOUT_COPY}" ]; then
+            echo "cannot restore stdout as no copy is identifiable" >&2
+            return 1
+        fi
+
+        exec 1>&-
+        exec >&"${_STDOUT_COPY}"-
+
+        unset _STDOUT_COPY
+    }
+
+    local tmp_fifo
+    tmp_fifo="$(mktemp --tmpdir "${0##*/}${$}XXXXXXXXXX")"
+    trap -- "rm -f ${tmp_fifo}" EXIT RETURN INT HUP TERM
+
+    rm -f "${tmp_fifo}" && mkfifo "${tmp_fifo}" && echo "success" >&2
+
+    local line_in_fd=3
+    local line_out_fd=4
+   
+    # Avoid a deadlock by starting this in the background (apparently this works?)
+    #local bg_pid="${!}"
     
+    # TODO: Fuck this just use a named fifo and deal with it
+    exec {line_in_fd}< <(cat "${tmp_fifo}")
+    sleep 0.1
+    exec {line_out_fd}> "${tmp_fifo}"
+    
+    rm -f "${tmp_fifo}"
+
+    setup_stdout "${line_out_fd}"
+
     function evaluate() {
-        eval "${*}"
+        (eval "${*}")
+    }
+    function evaluate_inline() {
+        (
+            shopt -s expand_aliases
+            alias echo='echo -En '
+            eval "${*}"
+        )
     }
     function process_file() {
         shopt -sq extglob
@@ -43,9 +95,7 @@ function mbash() {
         # Inline command is a command which outputs as part of the middle of a raw line
         local inline_command
 
-        # todo: '#$|' execute command with stdin being the line preceeding the command
-        # todo: '#$[n]>' execute command with fd n being stdin
-        # todo: '#$[n]<' if there are commands following the commands are executed with stdout being fd n, if no commands start a multiline capture and pipe capture to fd n
+        # todo: '#$' execute command with stdin being the line preceeding the command
         # todo: '#$-' no further commands may follow, ends a multiline capture
         # todo: '#$rep [n]'
         # todo: '#$while [ cond ]; <commands>'
@@ -57,9 +107,12 @@ function mbash() {
                 continue
             # if line command is set but the line does not start with a command marker
             elif [ -n "${line_command}" ]; then
-                (eval "${line_command}")
+                evaluate ${line_command}
                 line_command=
             fi
+            
+            # Empty line in of previous line in case unused (no line command or line command didn't use stdin)
+            cat <&"${line_in_fd}" >/dev/null
         
             if [[ "${line}" == *'#$'* ]]; then
                 line_command="${line#*'#$'}"$'\n'
@@ -90,11 +143,7 @@ function mbash() {
                         inline_command="${line_part#*'${{'}"
                         inline_command="${inline_command%'}}'}"
                         if [ -n "${inline_command}" ]; then
-                            (
-                                shopt -s expand_aliases
-                                alias echo='echo -En ';
-                                evaluate "${inline_command}"
-                            )
+                            evaluate_inline "${inline_command}"
                         fi
                         inline_command=
                     fi
@@ -103,7 +152,7 @@ function mbash() {
                 fi
             done
 
-            [ -z "${line_command}" ] && echo
+            [ -z "${line_command}" ] && echo;
 
         done < "${FILE}"
 
@@ -121,6 +170,7 @@ function mbash() {
     done
 
     unset -f process_file
+    restore_stdout
 }
 
-[[ "$-" != *i* ]] && mbash "${@}"
+mbash "${@}"
