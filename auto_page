@@ -1,0 +1,53 @@
+#!/bin/sh 
+
+dup_pipe() {
+	while read -r pageview_line; do
+		echo "${pageview_line}"
+		echo "${pageview_line}" >&2
+	done
+}
+auto_page() {
+	tty_state="$(stty -g < /dev/tty 2>/dev/null)"
+	first_fifo="${TMPDIR:-/tmp}/.out1.${$}"
+	second_fifo="${TMPDIR:-/tmp}/.out2.${$}"
+
+	trap "rm -f '${first_fifo}' '${second_fifo}'; [ -n '${tty_state}' ] && stty ${tty_state} < /dev/tty 2>/dev/null " EXIT
+
+	mkfifo -m 600 "${first_fifo}" "${second_fifo}"
+
+	script_pid=
+	forwarding_pid=
+	
+	if [ "${#}" -gt 0 ]; then
+		{ script --quiet -c "${*}" 2>&1 | dup_pipe >"${first_fifo}" 2>"${second_fifo}"; } &
+		script_pid="${!}"
+	elif [ ! -t 0 ]; then
+		dup_pipe >"${first_fifo}" 2>"${second_fifo}" <&0 &
+		script_pid="${!}"
+	else
+		echo "Usage: ${0} <command> [args...]"
+		return 1
+	fi
+
+	exec 3<"${first_fifo}"
+	exec 4<"${second_fifo}"
+
+	# If not outputting to the tty forward as we show the pager for efficiency
+	if [ ! -t 1 ]; then
+		cat <&4 &
+		forwarding_pid="${!}"
+	fi
+
+	# Explicitly write to the tty in case we are in a pipeline
+	${PAGER:-less -r} <&3 >/dev/tty 2>&2
+
+	# If writing to the tty we should wait until the pager finishes before printing
+	[ -t 1 ] &&	cat <&4
+	
+	[ -n "${script_pid}" ]		&& wait "${script_pid}"
+	[ -n "${forwarding_pid}" ]	&& wait "${forwarding_pid}"
+
+	unset -v tty_state first_fifo second_fifo
+}
+
+auto_page "${@}"
