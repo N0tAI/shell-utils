@@ -1,6 +1,6 @@
 #!/bin/bash
 
-function mbash() {
+function bashex() {
     if [ -z "${1}" ]; then
         echo "Usage: ${0} [FILES ...]"
         return 1
@@ -173,4 +173,4 @@ function mbash() {
     restore_stdout
 }
 
-mbash "${@}"
+[[ "${-}" == *i* ]] || bashex "${@}"
