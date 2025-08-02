@@ -9,7 +9,7 @@ pickshell() {
     # Select all shell lines (non comments and empty lines
     SELECTABLE_SHELLS="$(< "${RC_SHELL_LIST}" sed -e 's/#.*//g' -e 's/^\s\{1,\}\|\s\{1,\}$//' -e '/^$/ d' | uniq)"
 
-    SELECTED_LINE="$(echo "${SELECTABLE_SHELLS}" | nl -b a | sed -e 's/^\s*\([[:digit:]]*\)\s\{1,\}[~\.]\{0,1\}\/\(.*\/\)\{0,1\}\([[:alnum:]]\{1,\}\).*/\1 \3/' | ${PICKSHELL_SELECTION_CMD:-"${PICKSHELL_DEFAULT_CMD}"} | sed -e 's/^\s*\([[:digit:]]*\).*$/\1/')"
+    SELECTED_LINE="$(echo "${SELECTABLE_SHELLS}" | nl -b a | sed -e 's/^\s*\([[:digit:]]*\)\s\{1,\}[~\.]\{0,1\}\/\(.*\/\)\{0,1\}\([[:alnum:]]\{1,\}\).*/\1 \3/' | ${PICKSHELL_SELECTION_CMD:-${PICKSHELL_DEFAULT_CMD}} | sed -e 's/^\s*\([[:digit:]]*\).*$/\1/')"
 
     SELECTED_SHELL="$(echo "${SELECTABLE_SHELLS}" | sed -n "${SELECTED_LINE}p" | sed -e "s#^\.#${PWD}#" -e "s#^~#${HOME}#")"
 
