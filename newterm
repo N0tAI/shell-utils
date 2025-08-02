@@ -1,32 +1,33 @@
 #!/bin/bash
-SESSION_WINDOW_CLASS='tmux-iterm'
-# 1 = priority workspace
-# 2 = all other workspaces to search
-find_tmux_session() {
-    local pid
-    # check all workspaces starting with the priority workspace
-    for ws in "${@}"; do
-        read -r WAYLAND_ADDRESS pid <<< "$(hyprctl clients -j | jq -r ".[] | select(.workspace.id == (${ws} | tonumber) and .class == \"${SESSION_WINDOW_CLASS}\") | \"\\(.address) \\(.pid)\"")"
-        if [ -n "${WAYLAND_ADDRESS}" ]; then
-            local tmux_client_pid
-            tmux_client_pid="$(ps --ppid "${pid}" -o pid= | sed 's/^[[:blank:]]*//;s/[[:blank:]]*$//')"
-            SELECTED_TMUX_SESSION="$(tmux list-client -F "#{client_session}" -f "#{==:#{client_pid},${tmux_client_pid}}")"
-            return 0
-        fi
-    done
-    
-    return 1
-}
-add_tmux_pane() {
-    # Gets the currently active window in the existing session
-    local active_window
-    active_window="$(tmux list-windows -F '#{?window_active,#{window_index},}' -t "${1}")"
-    tmux split-window -h -t "${1}:${active_window}" ${2:+--} ${2}
-}
-get_focused_workspace_name() {
-    hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.name'
-}
-main() {
+newterm() {
+    SESSION_WINDOW_CLASS='tmux-iterm'
+    trap "unset -f find_tmux_session add_tmux_pane get_focused_workspace_name" RETURN
+    # 1 = priority workspace
+    # 2 = all other workspaces to search
+    find_tmux_session() {
+        local pid
+        # check all workspaces starting with the priority workspace
+        for ws in "${@}"; do
+            read -r WAYLAND_ADDRESS pid <<< "$(hyprctl clients -j | jq -r ".[] | select(.workspace.id == (${ws} | tonumber) and .class == \"${SESSION_WINDOW_CLASS}\") | \"\\(.address) \\(.pid)\"")"
+            if [ -n "${WAYLAND_ADDRESS}" ]; then
+                local tmux_client_pid
+                tmux_client_pid="$(ps --ppid "${pid}" -o pid= | sed 's/^[[:blank:]]*//;s/[[:blank:]]*$//')"
+                SELECTED_TMUX_SESSION="$(tmux list-client -F "#{client_session}" -f "#{==:#{client_pid},${tmux_client_pid}}")"
+                return 0
+            fi
+        done
+        
+        return 1
+    }
+    add_tmux_pane() {
+        # Gets the currently active window in the existing session
+        local active_window
+        active_window="$(tmux list-windows -F '#{?window_active,#{window_index},}' -t "${1}")"
+        tmux split-window -h -t "${1}:${active_window}" ${2:+--} ${2}
+    }
+    get_focused_workspace_name() {
+        hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.name'
+    }
     local FOCUSED_WORKSPACE
     local VISIBLE_WORKSPACES
     local WAYLAND_ADDRESS
@@ -57,4 +58,5 @@ main() {
         hyprctl dispatch focuswindow "address:${WAYLAND_ADDRESS}" > /dev/null
     fi
 }
-main "${@}"
+
+[[ "${-}" == *i* ]] || newterm "${@}"
