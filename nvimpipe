@@ -1,10 +1,21 @@
 #!/bin/sh
 
-# if outputting to the tty continue as normal
-# Create tmp file to hold and write data
-NVIMPIPE_TMPFILE="${TMPDIR:-/tmp}/nvimpipe.${$}$(date '+%e%H%M%S')"
-trap "rm -f '${NVIMPIPE_TMPFILE}' || true" EXIT INT HUP TERM
+nvimpipe() {
+    # if outputting to the tty continue as normal
+    # Create tmp file to hold and write data
+    NVIMPIPE_TMPFILE="${TMPDIR:-/tmp}/nvimpipe.${$}$(date '+%e%H%M%S')"
+    trap "rm -f '${NVIMPIPE_TMPFILE}' || true; unset -v NVIMPIPE_TMPFILE" EXIT
 
-# Will output the entirety of input if unedited
-nvim "+file ${NVIMPIPE_TMPFILE}" '+w!' '+set autowriteall' "${@}" >/dev/tty;
-cat "${NVIMPIPE_TMPFILE}"
+    # Will output the entirety of input if unedited
+    nvim "+file ${NVIMPIPE_TMPFILE}" '+w!' '+set autowriteall' "${@}" >/dev/tty;
+    cat "${NVIMPIPE_TMPFILE}"
+    unset -f NVIMPIPE_TMPFILE
+}
+
+case "${-}" in
+    *i*)
+        ;;
+    *)
+        nvimpipe "${@}"
+        ;;
+esac
