@@ -1,12 +1,25 @@
 #!/bin/sh
 
-[ -f "${RC_SHELL_LIST:="${XDG_CONFIG_HOME:-"${HOME}/.config"}/shells"}" ] || { echo "No shells file found"; exit 1; }
+pickshell() {
+    [ -f "${RC_SHELL_LIST:="${XDG_CONFIG_HOME:-"${HOME}/.config"}/shells"}" ] || { echo "No shells file found"; exit 1; }
 
-SELECT_CMD='bemenu -l 25 -p 'Select Shell' -W 0.5'
+    # default command to use if PICKSHELL_SELECTION_CMD is unset
+    PICKSHELL_DEFAULT_CMD="bemenu -l 25 -p 'Select Shell' -W 0.5"
 
-# Select all shell lines (non comments and empty lines
-SELECTABLE_SHELLS="$(< "${RC_SHELL_LIST}" sed -e 's/#.*//g' -e 's/^\s\{1,\}\|\s\{1,\}$//' -e '/^$/ d' | uniq)"
-SELECTED_LINE="$(echo "${SELECTABLE_SHELLS}" | nl -b a | sed -e 's/^\s*\([[:digit:]]*\)\s\{1,\}[~\.]\{0,1\}\/\(.*\/\)\{0,1\}\([[:alnum:]]\{1,\}\).*/\1 \3/' | ${SELECT_CMD} | sed -e 's/^\s*\([[:digit:]]*\).*$/\1/')"
-SELECTED_SHELL="$(echo "${SELECTABLE_SHELLS}" | sed -n "${SELECTED_LINE}p" | sed -e "s#^\.#${PWD}#" -e "s#^~#${HOME}#")"
+    # Select all shell lines (non comments and empty lines
+    SELECTABLE_SHELLS="$(< "${RC_SHELL_LIST}" sed -e 's/#.*//g' -e 's/^\s\{1,\}\|\s\{1,\}$//' -e '/^$/ d' | uniq)"
 
-exec newterm ${SELECTED_SHELL}
+    SELECTED_LINE="$(echo "${SELECTABLE_SHELLS}" | nl -b a | sed -e 's/^\s*\([[:digit:]]*\)\s\{1,\}[~\.]\{0,1\}\/\(.*\/\)\{0,1\}\([[:alnum:]]\{1,\}\).*/\1 \3/' | ${PICKSHELL_SELECTION_CMD:-"${PICKSHELL_DEFAULT_CMD}"} | sed -e 's/^\s*\([[:digit:]]*\).*$/\1/')"
+
+    SELECTED_SHELL="$(echo "${SELECTABLE_SHELLS}" | sed -n "${SELECTED_LINE}p" | sed -e "s#^\.#${PWD}#" -e "s#^~#${HOME}#")"
+
+    exec newterm ${SELECTED_SHELL}
+}
+
+case "${-}" in
+    *i*)
+        ;;
+    *)
+        pickshell "${@}"
+        ;;
+esac
