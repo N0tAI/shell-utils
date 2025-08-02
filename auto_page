@@ -42,7 +42,13 @@ auto_page() {
 	${PAGER:-less -r} <&3 >/dev/tty 2>&2
 
 	# If writing to the tty we should wait until the pager finishes before printing
-	[ -t 1 ] &&	cat <&4
+	if [ -t 1 ]; then
+		if command -v bat >/dev/null; then
+			bat - <&4
+		else
+			cat <&4
+		fi
+	fi
 	
 	[ -n "${script_pid}" ]		&& wait "${script_pid}"
 	[ -n "${forwarding_pid}" ]	&& wait "${forwarding_pid}"
