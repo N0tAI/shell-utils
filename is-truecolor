@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 
 check_truecolor() {
     local response
@@ -8,7 +8,7 @@ check_truecolor() {
 
     stty raw -echo
 
-    printf '\e]4;2;?\e\\'
+    printf '\x1B]4;2;?\x1B\\'
     read -t 0.5 -s -r -d '\' response
     stty "${old_stty}"
 

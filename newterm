@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/bin/bash
 SESSION_WINDOW_CLASS='tmux-iterm'
 # 1 = priority workspace
 # 2 = all other workspaces to search
