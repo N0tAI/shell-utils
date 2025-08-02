@@ -21,11 +21,7 @@ add_tmux_pane() {
     # Gets the currently active window in the existing session
     local active_window
     active_window="$(tmux list-windows -F '#{?window_active,#{window_index},}' -t "${1}")"
-    if [ -n "${2}" ]; then
-        tmux split-window -h -t "${1}:${active_window}" -- "${2}"
-    else
-        tmux split-window -h -t "${1}:${active_window}"
-    fi
+    tmux split-window -h -t "${1}:${active_window}" ${2:+--} ${2}
 }
 get_focused_workspace_name() {
     hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.name'
@@ -34,7 +30,6 @@ main() {
     local FOCUSED_WORKSPACE
     local VISIBLE_WORKSPACES
     local WAYLAND_ADDRESS
-    local SESSION_WINDOW_CLASS
     local COMMAND
     COMMAND="${*}"
     FOCUSED_WORKSPACE=$(hyprctl monitors -j | jq -r '.[] | select(.focused == true) | .activeWorkspace.id')
@@ -47,12 +42,15 @@ main() {
         workspace_name="hypr_$(get_focused_workspace_name)"
         
         local hyprland_command
-        hyprland_command="alacritty --class '${SESSION_WINDOW_CLASS}' -e tmux new -AD -s '${workspace_name}'"
+        
+        hyprland_command="${NEWTERM_WINDOW_CMD:-"${HOME}/local/bin/run_app.sh foot --app-id='${SESSION_WINDOW_CLASS}'"} tmux new -AD -s '${workspace_name}'"
+
+        echo "${hyprland_command}"
 
         [ -n "${COMMAND}" ] && hyprland_command="${hyprland_command} '${COMMAND}'"
 
         # Create new window if no window found
-        hyprctl dispatch exec "${hyprland_command}"
+        hyprctl dispatch execr "${hyprland_command} > /tmp/log 2>&1"
     else
         # Gotta get the workspace of the focused tmux window
         add_tmux_pane "${SELECTED_TMUX_SESSION}" "${COMMAND}"
