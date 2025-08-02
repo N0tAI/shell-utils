@@ -18,4 +18,4 @@ check_truecolor() {
     return 1;
 }
 
-check_truecolor "${@}"
+[[ "${-}" == *i* ]] || check_truecolor "${@}"
